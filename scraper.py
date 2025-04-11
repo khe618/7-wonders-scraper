@@ -1,6 +1,7 @@
 import asyncio
 import requests
 import re
+import os
 import pandas as pd
 from playwright.async_api import async_playwright
 
@@ -96,7 +97,7 @@ async def main():
         print("🚫 Could not determine player ID.")
         return
 
-    all_rows = []
+
     page = 1
 
     while True:
@@ -107,6 +108,10 @@ async def main():
 
         for game in data["data"]["tables"]:
             table_id = game["table_id"]
+            if os.path.exists(f"data/{table_id}.csv"):
+                print(f"Found data for table {table_id}")
+                continue
+            
             print(f"\n🔍 Fetching info for table {table_id}...")
             table_info = fetch_table_info(table_id, cookie_header, token)
             if not table_info or "data" not in table_info:
@@ -128,8 +133,9 @@ async def main():
                 "wonder": stats.get("points_wonder", {}).get("values", {}),
                 "victory": stats.get("points_victory", {}).get("values", {}),
                 "defeat": stats.get("points_defeat", {}).get("values", {}),
+                "time": stats.get("reflexion_time", {}).get("values", {}),
             }
-
+            all_rows = []
             if len(points_by_category["civilian"]) > 0:
                 for player in players:
                     pid = str(player["player_id"])  # Make sure the ID is a string to match dict keys
@@ -147,16 +153,20 @@ async def main():
                         "VP - Wonder": points_by_category["wonder"].get(pid),
                         "VP - Military (Victory)": points_by_category["victory"].get(pid),
                         "VP - Military (Defeat)": points_by_category["defeat"].get(pid),
+                        "ELO Won": player.get('point_win'),
+                        "ELO After": player.get('rank_after_game'),
+                        "Start": game['start'],
+                        "End": game['end'],
                     }
                     all_rows.append(row)
+                df = pd.DataFrame(all_rows)
+                df.to_csv(f"data/{table_id}.csv", index=False)
+            
 
 
         page += 1
 
-    df = pd.DataFrame(all_rows)
-    df.to_csv("seven_wonders_results.csv", index=False)
-    print("📁 Data saved to 'seven_wonders_results.csv'")
-    print(df.head())
+    
 
 # Run the script
 asyncio.run(main())
